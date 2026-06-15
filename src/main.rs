@@ -74,15 +74,16 @@ impl Backend {
         // Produce diagnostic hints for each crate where we might be helpful.
         let nu_sev = self.settings.needs_update_severity().await;
         let utd_sev = self.settings.up_to_date_severity().await;
+        let should_diag_utd = self.settings.should_print_up_to_date().await;
         let ud_sev = self.settings.unknown_dep_severity().await;
         let diagnostics: Vec<_> = dependency_with_versions
             .into_iter()
-            .map(|dependency| {
+            .filter_map(|dependency| {
                 if let Some(Some(newest_version)) = newest_packages.get(&dependency.name) {
                     match &dependency.version {
                         DependencyVersion::Complete { range, version } => {
                             if !version.matches(newest_version) {
-                                Diagnostic {
+                                Some(Diagnostic {
                                     range: *range,
                                     severity: Some(nu_sev),
                                     code: Some(NumberOrString::Number(
@@ -96,24 +97,28 @@ impl Backend {
                                     data: Some(serde_json::json!({
                                         "newest_version": newest_version,
                                     })),
-                                }
+                                })
                             } else {
-                                let range = Range {
-                                    start: Position::new(range.start.line, 0),
-                                    end: Position::new(range.start.line, 0),
-                                };
-                                Diagnostic::new(
-                                    range,
-                                    Some(utd_sev),
-                                    Some(NumberOrString::Number(diagnostic_codes::UP_TO_DATE)),
-                                    None,
-                                    "✓".to_string(),
-                                    None,
-                                    None,
-                                )
+                                if should_diag_utd {
+                                    let range = Range {
+                                        start: Position::new(range.start.line, 0),
+                                        end: Position::new(range.start.line, 0),
+                                    };
+                                    Some(Diagnostic::new(
+                                        range,
+                                        Some(utd_sev),
+                                        Some(NumberOrString::Number(diagnostic_codes::UP_TO_DATE)),
+                                        None,
+                                        "✓".to_string(),
+                                        None,
+                                        None,
+                                    ))
+                                } else {
+                                    None
+                                }
                             }
                         }
-                        DependencyVersion::Partial { range, .. } => Diagnostic {
+                        DependencyVersion::Partial { range, .. } => Some(Diagnostic {
                             range: *range,
                             severity: Some(nu_sev),
                             code: Some(NumberOrString::Number(diagnostic_codes::NEEDS_UPDATE)),
@@ -125,10 +130,10 @@ impl Backend {
                             data: Some(serde_json::json!({
                                 "newest_version": newest_version,
                             })),
-                        },
+                        }),
                     }
                 } else {
-                    Diagnostic {
+                    Some(Diagnostic {
                         range: dependency.version.range(),
                         severity: Some(ud_sev),
                         code: Some(NumberOrString::Number(diagnostic_codes::UNKNOWN_DEP)),
@@ -138,7 +143,7 @@ impl Backend {
                         related_information: None,
                         tags: None,
                         data: None,
-                    }
+                    })
                 }
             })
             .collect();

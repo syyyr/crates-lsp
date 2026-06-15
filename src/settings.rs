@@ -65,6 +65,14 @@ impl Settings {
             .unwrap_or(DiagnosticSeverity::HINT)
     }
 
+    pub async fn should_print_up_to_date(&self) -> bool {
+        self.inner
+            .read()
+            .await
+            .should_print_up_to_date
+            .unwrap_or(true)
+    }
+
     pub async fn unknown_dep_severity(&self) -> DiagnosticSeverity {
         self.inner
             .read()
@@ -143,6 +151,8 @@ pub struct LspSettings {
     pub needs_update_severity: Option<DiagnosticSeverity>,
     #[serde(default)]
     pub up_to_date_severity: Option<DiagnosticSeverity>,
+    #[serde(default)]
+    pub should_print_up_to_date: Option<bool>,
     #[serde(default)]
     pub unknown_dep_severity: Option<DiagnosticSeverity>,
     #[serde(default)]
